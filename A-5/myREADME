@@ -1,0 +1,19 @@
+Assignment 5: Process Synchronization
+
+Design Overview
+1. Shared Memory: Implemented a kernel-level shm_get syscall mapped at 0x3F000000. Memory leaks on exit are prevented by patching proc_freepagetable and shmunmap.
+2. Semaphores: Implemented counting semaphores via sem_init, sem_wait, and sem_post system calls using xv6's native sleep() and wakeup() functions with spinlocks to ensure atomicity.
+
+Solutions
+- Q1 (Peterson's Algorithm): Done via flag and turn variables in shared memory. __sync_synchronize() ensures strict memory ordering.
+- Q2 (Producer-Consumer): Uses SEM_MUTEX, SEM_EMPTY, and SEM_FULL to arrange a bounded buffer. 
+- Q3 (Readers-Writers): Prioritizes readers using a read_count variable protected by a mutex, while a wrt semaphore guarantees writer exclusivity.
+- Q4 (Dining Philosophers): Avoids deadlock through strict resource ordering (lower-numbered fork first) preventing circular wait.
+
+Build and Run
+
+make qemu
+peterson
+prodcons
+readwrite
+dining
