@@ -1,0 +1,158 @@
+#include "types.h"
+#include "stat.h"
+#include "user.h"
+
+#define N 5
+#define M 3
+
+/* Classic textbook snapshot (Silberschatz) */
+static int Allocation[N][M] = {
+  {0,1,0},{2,0,0},{3,0,2},{2,1,1},{0,0,2}
+};
+static int Max[N][M] = {
+  {7,5,3},{3,2,2},{9,0,2},{2,2,2},{4,3,3}
+};
+static int Available[M] = {3,3,2};
+static int Need[N][M];          /* computed at runtime: Max - Allocation */
+
+static void
+compute_need(void)
+{
+  int i, j;
+  for(i = 0; i < N; i++)
+    for(j = 0; j < M; j++)
+      Need[i][j] = Max[i][j] - Allocation[i][j];
+}
+
+static void
+print_state(void)
+{
+  int i, j;
+  printf(1, "\nAvailable: ");
+  for(j = 0; j < M; j++) printf(1, "%d ", Available[j]);
+  printf(1, "\n\nProc  Allocation   Max   Need\n");
+  for(i = 0; i < N; i++){
+    printf(1, "P%d     ", i);
+    for(j = 0; j < M; j++) printf(1, "%d ", Allocation[i][j]);
+    printf(1, "    ");
+    for(j = 0; j < M; j++) printf(1, "%d ", Max[i][j]);
+    printf(1, "   ");
+    for(j = 0; j < M; j++) printf(1, "%d ", Need[i][j]);
+    printf(1, "\n");
+  }
+}
+
+/* Safety algorithm: 1 = safe (seq filled), 0 = unsafe */
+static int
+safety(int *seq)
+{
+  int work[M], finish[N], i, j, count = 0, found;
+  for(j = 0; j < M; j++) work[j] = Available[j];
+  for(i = 0; i < N; i++) finish[i] = 0;
+  while(count < N){
+    found = 0;
+    for(i = 0; i < N; i++){
+      if(finish[i]) continue;
+      for(j = 0; j < M; j++)
+        if(Need[i][j] > work[j]) break;
+      if(j == M){                       /* Need[i] <= work: can finish */
+        for(j = 0; j < M; j++) work[j] += Allocation[i][j];
+        finish[i] = 1;
+        seq[count++] = i;
+        found = 1;
+      }
+    }
+    if(!found) return 0;                /* nobody can proceed -> unsafe */
+  }
+  return 1;
+}
+
+static void
+print_seq(int *seq)
+{
+  int i;
+  printf(1, "<");
+  for(i = 0; i < N; i++)
+    printf(1, "P%d%s", seq[i], i == N-1 ? "" : ", ");
+  printf(1, ">");
+}
+
+/* Resource-request algorithm: 0 = granted, -1 = denied */
+static int
+try_request(int pid, int *req)
+{
+  int i, seq[N];
+  printf(1, "\n--- P%d requests (", pid);
+  for(i = 0; i < M; i++) printf(1, "%d%s", req[i], i == M-1 ? "" : ", ");
+  printf(1, ") ---\n");
+
+  for(i = 0; i < M; i++)
+    if(req[i] > Need[pid][i]){
+      printf(1, "Request DENIED: exceeds Need of P%d\n", pid);
+      return -1;
+    }
+  for(i = 0; i < M; i++)
+    if(req[i] > Available[i]){
+      printf(1, "Request DENIED: exceeds Available (P%d must wait)\n", pid);
+      return -1;
+    }
+
+  /* pretend to grant */
+  for(i = 0; i < M; i++){
+    Available[i]      -= req[i];
+    Allocation[pid][i] += req[i];
+    Need[pid][i]      -= req[i];
+  }
+
+  if(safety(seq)){
+    printf(1, "Safety check: SAFE, sequence ");
+    print_seq(seq);
+    printf(1, "\nRequest GRANTED - allocation committed.\n");
+    return 0;
+  }
+
+  /* roll back */
+  for(i = 0; i < M; i++){
+    Available[i]      += req[i];
+    Allocation[pid][i] -= req[i];
+    Need[pid][i]      += req[i];
+  }
+  printf(1, "Safety check: UNSAFE\n");
+  printf(1, "Request denied - would lead to unsafe state (rolled back).\n");
+  return -1;
+}
+
+int
+main(int argc, char *argv[])
+{
+  int seq[N], i;
+  int req[M];
+
+  compute_need();
+  printf(1, "Banker's Algorithm Simulation (%d processes, %d resource types)\n", N, M);
+  print_state();
+
+  if(safety(seq)){
+    printf(1, "\nSystem is in a SAFE state. Safe sequence: ");
+    print_seq(seq);
+    printf(1, "\n");
+  } else {
+    printf(1, "\nSystem is in an UNSAFE state!\n");
+  }
+
+  if(argc == 5){
+    /* CLI mode: bankers <pid> <r0> <r1> <r2> */
+    req[0] = atoi(argv[2]); req[1] = atoi(argv[3]); req[2] = atoi(argv[4]);
+    try_request(atoi(argv[1]), req);
+  } else {
+    /* Built-in test scenarios */
+    int r1[M] = {1,0,2};   // should be GRANTED (textbook)
+    int r2[M] = {3,3,0};   // DENIED: exceeds Available
+    int r3[M] = {0,2,0};   // DENIED: would become unsafe
+    try_request(1, r1);
+    try_request(4, r2);
+    try_request(0, r3);
+    print_state();         // final tables show the committed grant
+  }
+  exit();
+}
