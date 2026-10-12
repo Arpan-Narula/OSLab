@@ -1,0 +1,11 @@
+q1 threads
+thread is basically normal proc struct but with a flag. clone() uses allocproc() but skips copyuvm(). it just copies the page dir pointer so address space is completely shared. args and a fake return address r pushed to stack so it starts right. join() only reaps threads and skips freevm() to protect that shared memory. normal wait ignores threads entirely. unsynced tests give random counts due to race conditions.
+
+q2 sems
+made a fixed array of kernel semaphores with spinlocks. sem_wait() drops value and sleeps if negative, sem_signal() ups it and wakes sleeping threads. standard sleep/wakeup stuff. synced tests give the exact right count every time. prod/consumer uses multiple sems for empty/full tracking and mutex protection. strict alternation with no buffer overflows.
+
+q3 deadlocks
+standard detection algo: find unfinished procs whose request fits available work, mark done, add allocation back. whatever is left is deadlocked. is_safe_state() checks 'need' to validate states. tested basic hold & wait (gets caught), bankers example (safe), and over-requesting resources (unsafe, rolls back). real pipe deadlock gets caught and killed by watchdog.
+
+q4 priority scheduling
+added priority and wait ticks to proc. scheduler picks highest priority runnable proc. rotating index gives round robin fairness for ties. waiting procs get ticks bumped over time, and if they wait too long they get priority boosted so they dont starve (aging). higher priority finishes first, but lowest ones eventually finish too cuz you can see the boost kick in.
