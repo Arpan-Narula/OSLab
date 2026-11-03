@@ -1,0 +1,19 @@
+Assignment 10 Report
+By: Arpan Narula
+
+Question 1: Tracking Physical Memory Allocation
+I added two counters (total_allocated, total_freed) plus a free-page counter in kalloc.c, updated under kmem.lock so they stay safe across CPUs. The new memstats() syscall reads them and prints allocated, freed, current, and available pages. memtest.c calls memstats() before and after grabbing 5 pages with sbrk(), then again after freeing them — the counts move exactly as expected.
+
+Question 2: Virtual-to-Physical Address Translation
+walkpgdir() already does the page-table walk in vm.c, it's just private. I wrapped it in a small va2pa() function that checks the present bit and adds the page offset to the frame address. The vtop() syscall calls that and prints the result, or says the address isn't mapped. vttest.c tries it on a couple of valid addresses inside an sbrk()'d region and one address way outside it, which correctly comes back invalid.
+
+Question 3: Page Table Inspection and Protection
+Two more wrappers around walkpgdir(): getpageinfo() returns the frame number plus the P/W/U flags, and clearwrite() clears PTE_W and reloads cr3 so it takes effect right away. These back the pageinfo() and setreadonly() syscalls. pagetest.c allocates a page, prints its flags, makes it read-only, prints the flags again (W is now 0), then writes to it anyway — that write faults and kills the process, which is the whole point.
+
+Question 4: Page Replacement Algorithms
+pagereplace.c simulates FIFO, LRU, and Optimal in user space on the reference string from the assignment, first with 3 frames and then with 3/4/5 frames for the comparison table. FIFO evicts whoever's been in memory longest, LRU evicts whoever hasn't been touched in the longest time, and Optimal cheats by looking ahead to evict whatever's needed furthest in the future.
+With 3 frames, Optimal has the fewest faults, LRU is a bit behind it, and FIFO is worst — expected, since Optimal gets to cheat with perfect foresight.
+Same pattern at 4 and 5 frames: Optimal < LRU < FIFO, and faults drop for all three as frames increase. LRU beats FIFO here because pages like 0 and 2 keep getting reused, which is exactly what LRU is built to protect.
+
+Summary
+All four features sit on top of xv6's existing allocator and page-table code, reusing walkpgdir() instead of duplicating it. Files touched: kalloc.c, vm.c, sysproc.c, syscall.c, syscall.h, defs.h, user.h, usys.S, plus four new user programs.
